@@ -6,9 +6,9 @@ The skill reads only this file for facts about you. Anything not written here, i
 ---
 
 ## Storage
-- **DRIVE_FOLDER_ID:** `{{GOOGLE_DRIVE_FOLDER_ID}}` (the folder holding `outreach_data.md` and the batch files; it's the last part of the folder's URL)
+- **DATA_FILE:** `{{ABSOLUTE_PATH_TO_YOUR_outreach_dedupe.md}}` (local dedupe list; copy `templates/outreach_data.md` there)
 - **Gmail account for drafts:** {{YOUR_GMAIL_ADDRESS}}
-- **Resume file name in Drive:** {{Your_Resume.pdf}} (must match `RESUME_NAME` in the Apps Script)
+- **Resume file name in Drive (used by the Apps Script only):** {{Your_Resume.pdf}} (must match `RESUME_NAME` in the Apps Script)
 
 ---
 

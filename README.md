@@ -9,18 +9,17 @@ Claude never sends anything itself. You can check or delete drafts before they g
 
 ## Setup (about 10 minutes)
 
-**You need:** a Claude account with the **Gmail** and **Google Drive** connectors turned on, and your resume as a PDF.
+**You need:** a Claude account with the **Gmail** connector turned on (or the `multi-gmail` MCP), and your resume as a PDF in Google Drive for the sender script.
 
 ### 1. Make your profile
 1. Download this repo (green **Code** button → **Download ZIP**) and unzip it.
 2. In `skills/outreach/`, make a copy of `profile.example.md` and name it `profile.md`.
 3. Open `profile.md` and replace everything in `{{ }}` with your details: background, results, the jobs you want, your email template.
 
-### 2. Set up Google Drive
-1. Create a folder in Drive called `Outreach`.
-2. Upload `templates/outreach_data.md` into it. This is the list of companies you've contacted.
-3. Open the folder. Copy the ID from the URL (the part after `/folders/`) into `profile.md`.
-4. Upload your resume PDF anywhere in Drive.
+### 2. Set up your data file
+1. Copy `templates/outreach_data.md` somewhere on your machine (not in this repo's tracked files). This is the list of companies you've contacted.
+2. Put its path in `profile.md` as `DATA_FILE`.
+3. Upload your resume PDF anywhere in Google Drive (the sender script attaches it).
 
 ### 3. Add the skill to Claude
 1. Zip the `skills/outreach` folder (with your `profile.md` inside).

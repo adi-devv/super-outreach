@@ -1,7 +1,7 @@
 # Outreach master list
 
-The skill greps this file (plus every `outreach_batch_*.md`) before adding a company, so anything listed here is never contacted twice.
-Upload it to your Outreach folder in Google Drive as `outreach_data.md`.
+The skill reads this file before adding a company, so anything listed here is never contacted twice.
+Keep a copy on your machine and put its path in `profile.md` as `DATA_FILE`.
 
 ## Already contacted / drafted
 

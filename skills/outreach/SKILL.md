@@ -17,7 +17,7 @@ Everything personal lives in **`profile.md`** next to this file (copied from `pr
 - who the user is (background, current role, proof points, contact, honesty rules)
 - default targeting (roles, experience, pay bar, locations, skips, best-fit fields)
 - the email and follow-up templates, subject line and signature
-- where the outreach log lives (Google Drive folder ID)
+- where the outreach log lives (`DATA_FILE`, a local path)
 
 Read it in full before doing anything else. If `profile.md` is missing or still has `{{PLACEHOLDER}}` values, stop and tell the user which fields to fill in. Never invent facts about the user; use only what the profile says.
 
@@ -26,13 +26,11 @@ Read it in full before doing anything else. If `profile.md` is missing or still 
 - **No focus:** use the profile's default targeting.
 - The focus never overrides: full-time only (unless the profile says otherwise), dedupe, the profile's honesty rules, the email format, and logging.
 
-## 2. Data lives in Google Drive (single source of truth)
-Needs the Google Drive connector, plus either the Gmail connector or the `multi-gmail` MCP (see section 11).
-- Folder: the `DRIVE_FOLDER_ID` from the profile.
-- `outreach_data.md` — the master dedupe list (every company already contacted or drafted, with email domains, plus bounced / checked-and-skipped lists). Start it from `templates/outreach_data.md` in the repo.
-- `outreach_batch_NN_YYYY-MM-DD.md` — one file per batch. The Drive connector can't edit files, so each run adds a new file instead of editing the master.
-- **Reading:** `search_files` with `parentId = '<DRIVE_FOLDER_ID>'`, then `download_file_content` for each file. The result is base64 JSON and is often large; decode it with a short script in the shell and grep the decoded text. (`read_file_content` doesn't support markdown files.)
-- **Logging:** `create_file` in that folder with `contentMimeType: text/markdown`, `disableConversionToGoogleType: true`, title `outreach_batch_NN_YYYY-MM-DD.md`, where NN is one higher than the highest batch number found.
+## 2. Data lives in a local file (single source of truth)
+- The path is `DATA_FILE` in the profile: one markdown dedupe list, one line per company, `- Company — domain`. Start it from `templates/outreach_data.md` in the repo.
+- **Reading:** read the whole file before researching. **Logging:** append new companies at the end under a dated `###` heading (see section 8); never rewrite the older lines.
+- It lives on the user's machine, not in Drive and not in git. If `DATA_FILE` is missing or the file doesn't exist, stop and tell the user.
+- Needs the Gmail connector or the `multi-gmail` MCP (see section 11).
 - This skill + `profile.md` are the ONLY source for email format, subject lines, recipients and rules.
 
 ## 3. Sources
@@ -51,7 +49,7 @@ Apply the hard filters, skips and best-fit ranking from the profile. Generic rul
 - **Prefer** highly active, growing or recently funded companies: a round in the last 12 months, many open roles at once, headcount growth, recent accelerator batch or launch. Note the growth signal in the log.
 
 ## 5. Dedupe (every company, before adding it)
-1. Grep the decoded Drive files (`outreach_data.md` + every `outreach_batch_*.md`) for the company name and email domain, case-insensitive, plus name variants. Watch for substring false matches (e.g. "Cone" inside "Pinecone").
+1. Grep `DATA_FILE` for the company name and email domain, case-insensitive, plus name variants. Watch for substring false matches (e.g. "Cone" inside "Pinecone").
 2. Search Gmail Sent for the last 30 days only: `in:sent newer_than:30d COMPANY` and `... DOMAIN`. Also check unsent drafts (`search_mail` with `folder: "drafts"` on every account), because those aren't in Sent yet. Mail older than 30 days that got no reply or bounced is deliberately fair game again (it was pruned from the dedupe list), but skip any company that replied, even long ago. With the `multi-gmail` MCP, run `search_mail` on every account (`list_accounts` first), since the company may have been contacted from another one.
 Skip anything already contacted, drafted, bounced, or checked and skipped.
 
@@ -71,18 +69,18 @@ Use the cold template, subject line rules and body rules from `profile.md`. Gene
 - Follow-ups reply in the original thread and keep its subject, using the profile's follow-up template.
 
 ## 8. The run, step by step
-1. Read `profile.md`. Parse `N` and the focus. Load the dedupe data from the Drive folder.
+1. Read `profile.md`. Parse `N` and the focus. Read `DATA_FILE`.
 2. Research companies until you have 10 that pass the filters (or the focus) and dedupe.
-3. **Every 10 companies:** create the Gmail drafts (HTML, one draft per company, all addresses in To; with the MCP, one `create_drafts` call, which spreads them across accounts), then save the batch to Drive as a new `outreach_batch_NN_YYYY-MM-DD.md` file:
-   - Heading: `## Batch NN — COUNT companies, FOCUS-or-default (researched DATE) — DRAFTS CREATED DATE TIME`
-   - Table: `| # | Company | What / growth signal | Role (source, posted) | Pay | To |`, marking guessed addresses *unverified* and published ones ✅.
+3. **Every 10 companies:** create the Gmail drafts (HTML, one draft per company, all addresses in To; with the MCP, one `create_drafts` call, which spreads them across accounts), then append the batch to `DATA_FILE`:
+   - Heading: `### Batch NN — COUNT companies, FOCUS-or-default (researched DATE) — DRAFTS CREATED DATE TIME`
+   - One line per company: `- Company — domain`, adding `(unverified)` for guessed addresses.
    - One line: "Checked and skipped: COMPANY (reason), …" so later runs don't recheck them.
 4. Repeat until N companies are drafted. If sources run dry before N, stop, log what you have, and say so.
 5. **Don't send from Claude.** The auto-sender Apps Script (`apps-script/Code.gs`) attaches the resume and sends drafts on a timer (every 6 hours), max 20 per run. Install it separately in every account that holds drafts.
-6. Finish with a short summary: companies found, drafts created, batch files saved, how many addresses are guesses, and anything that blocked the run (e.g. no browser, so LinkedIn was skipped).
+6. Finish with a short summary: companies found, drafts created, companies logged, how many addresses are guesses, and anything that blocked the run (e.g. no browser, so LinkedIn was skipped).
 
 ## 9. Bounces
-When asked to check bounces: search Gmail for `from:mailer-daemon newer_than:2d` and save the bounced companies as a new Drive file `outreach_bounces_YYYY-MM-DD.md` in the folder. Don't re-guess bounced addresses; suggest applying via the job post instead.
+When asked to check bounces: search Gmail for `from:mailer-daemon newer_than:2d` and append the bounced companies to `DATA_FILE` under `### Bounced YYYY-MM-DD`. Don't re-guess bounced addresses; suggest applying via the job post instead.
 
 ## 10. Cautions
 - **Tense:** follow the profile's status line. If the profile says the role has ended, write it in the past tense ("at Kodo", "I built"), never "currently at". Check every template and every draft before creating it.

@@ -3,3 +3,4 @@ hire/
 .codex-jobs/
 node_modules/
 accounts.json
+data/
