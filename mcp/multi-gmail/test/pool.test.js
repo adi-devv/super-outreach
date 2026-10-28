@@ -28,3 +28,12 @@ test('search mail uses special-use folders, Gmail raw search, and thread reply f
   assert.equal((await pool.searchMail('a', { folder: 'sent', hasReply: false })).length, 0);
   assert.ok(pool.entry('a').client.calls.some((query) => query.gmraw === 'project newer_than:7d'));
 });
+
+test('headerValue parses raw header buffers from imapflow', async () => {
+  const { headerValue } = await import('../src/pool.js');
+  const buf = Buffer.from(['Message-ID: <a@b.mgmcp@x>', 'X-MGMCP: 1', 'References: <a>', ' <b>', '', ''].join(String.fromCharCode(13, 10)));
+  assert.equal(headerValue(buf, 'x-mgmcp'), '1');
+  assert.equal(headerValue(buf, 'message-id'), '<a@b.mgmcp@x>');
+  assert.equal(headerValue(buf, 'references'), '<a> <b>');
+  assert.equal(headerValue(buf, 'x-none'), undefined);
+});

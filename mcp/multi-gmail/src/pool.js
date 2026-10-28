@@ -7,6 +7,7 @@ import { threadHasReply } from './planner.js';
 const networkCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'NoConnection', 'SocketClosed', 'EPIPE']);
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export { headerValue };
 export function isNetworkError(error) {
   const message = String(error?.message || error);
   return networkCodes.has(error?.code) || /socket closed|not connected|connection.*closed/i.test(message);
@@ -27,6 +28,11 @@ export async function withRetry(operation) {
 
 function headerValue(headers, name) {
   if (!headers) return undefined;
+  if (Buffer.isBuffer(headers) || typeof headers === 'string') {
+    const text = String(headers).replace(/\r?\n[ \t]+/g, ' ');
+    const match = new RegExp(`^${name}:[ \\t]*(.*)$`, 'im').exec(text);
+    return match ? match[1].trim() : undefined;
+  }
   const value = headers.get?.(name) ?? headers.get?.(name.toLowerCase()) ?? headers[name] ?? headers[name.toLowerCase()];
   return Buffer.isBuffer(value) ? value.toString() : Array.isArray(value) ? String(value[0]) : value == null ? undefined : String(value);
 }

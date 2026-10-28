@@ -27,7 +27,7 @@ Read it in full before doing anything else. If `profile.md` is missing or still 
 - The focus never overrides: full-time only (unless the profile says otherwise), dedupe, the profile's honesty rules, the email format, and logging.
 
 ## 2. Data lives in Google Drive (single source of truth)
-Needs the Google Drive and Gmail connectors.
+Needs the Google Drive connector, plus either the Gmail connector or the `multi-gmail` MCP (see section 11).
 - Folder: the `DRIVE_FOLDER_ID` from the profile.
 - `outreach_data.md` — the master dedupe list (every company already contacted or drafted, with email domains, plus bounced / checked-and-skipped lists). Start it from `templates/outreach_data.md` in the repo.
 - `outreach_batch_NN_YYYY-MM-DD.md` — one file per batch. The Drive connector can't edit files, so each run adds a new file instead of editing the master.
@@ -52,7 +52,7 @@ Apply the hard filters, skips and best-fit ranking from the profile. Generic rul
 
 ## 5. Dedupe (every company, before adding it)
 1. Grep the decoded Drive files (`outreach_data.md` + every `outreach_batch_*.md`) for the company name and email domain, case-insensitive, plus name variants. Watch for substring false matches (e.g. "Cone" inside "Pinecone").
-2. Search Gmail Sent: `in:sent COMPANY` and `in:sent DOMAIN`.
+2. Search Gmail Sent: `in:sent COMPANY` and `in:sent DOMAIN`. With the `multi-gmail` MCP, run `search_mail` on every account (`list_accounts` first), since the company may have been contacted from another one.
 Skip anything already contacted, drafted, bounced, or checked and skipped.
 
 ## 6. Finding the person and email
@@ -73,18 +73,33 @@ Use the cold template, subject line rules and body rules from `profile.md`. Gene
 ## 8. The run, step by step
 1. Read `profile.md`. Parse `N` and the focus. Load the dedupe data from the Drive folder.
 2. Research companies until you have 10 that pass the filters (or the focus) and dedupe.
-3. **Every 10 companies:** create the Gmail drafts (HTML, one draft per company, all addresses in To), then save the batch to Drive as a new `outreach_batch_NN_YYYY-MM-DD.md` file:
+3. **Every 10 companies:** create the Gmail drafts (HTML, one draft per company, all addresses in To; with the MCP, one `create_drafts` call, which spreads them across accounts), then save the batch to Drive as a new `outreach_batch_NN_YYYY-MM-DD.md` file:
    - Heading: `## Batch NN — COUNT companies, FOCUS-or-default (researched DATE) — DRAFTS CREATED DATE TIME`
    - Table: `| # | Company | What / growth signal | Role (source, posted) | Pay | To |`, marking guessed addresses *unverified* and published ones ✅.
    - One line: "Checked and skipped: COMPANY (reason), …" so later runs don't recheck them.
 4. Repeat until N companies are drafted. If sources run dry before N, stop, log what you have, and say so.
-5. **Don't send from Claude.** The auto-sender Apps Script (`apps-script/Code.gs`) attaches the resume and sends drafts on a timer, max 20 per run.
+5. **Don't send from Claude.** The auto-sender Apps Script (`apps-script/Code.gs`) attaches the resume and sends drafts on a timer (every 6 hours), max 20 per run. Install it separately in every account that holds drafts.
 6. Finish with a short summary: companies found, drafts created, batch files saved, how many addresses are guesses, and anything that blocked the run (e.g. no browser, so LinkedIn was skipped).
 
 ## 9. Bounces
 When asked to check bounces: search Gmail for `from:mailer-daemon newer_than:2d` and save the bounced companies as a new Drive file `outreach_bounces_YYYY-MM-DD.md` in the folder. Don't re-guess bounced addresses; suggest applying via the job post instead.
 
 ## 10. Cautions
-- Don't use your current employer's paid tools (Sales Navigator, Apollo, etc.) for your own job search.
+- **Tense:** follow the profile's status line. If the profile says the role has ended, write it in the past tense ("at Kodo", "I built"), never "currently at". Check every template and every draft before creating it.
+- Don't use a current employer's paid tools (Sales Navigator, Apollo, etc.) for your own job search.
 - If the profile's proof points come from a current employer, confirm they're OK to share externally before a large batch.
 - High bounce rates can get a Gmail account rate-limited. Prefer published addresses, and keep guessed variants to a few per company.
+
+## 11. Multiple Gmail accounts (`multi-gmail` MCP)
+Optional. `mcp/multi-gmail/` in this repo is a stdio MCP that works over IMAP with app passwords, so several Gmail accounts can hold drafts. It never sends mail. Setup is in its README; accounts go in the gitignored `accounts.json`.
+- `list_accounts`, `verify_account`: check what is configured and that it logs in.
+- `create_drafts`: HTML drafts, spread across accounts so none builds too large a pending queue (`maxPendingWeight`). Pass `account` to pin one. Use `dryRun` to see the plan first.
+- `search_mail`, `read_thread`: look through Sent or Inbox, e.g. dedupe, bounces (`from:mailer-daemon`), replies.
+- `create_reply_drafts`: follow-ups inside the original thread, in the account that sent it.
+- `list_drafts`, `count_drafts`, `delete_draft`: manage the queue.
+
+**Follow-ups:** `search_mail` with `{account: "<name>", folder: "sent", hasReply: false, sinceDays: 14}`, `read_thread` on each hit, then `create_reply_drafts` using the profile's follow-up template. Never follow up on a company that replied.
+
+**Bounces:** `search_mail` with `query: "from:mailer-daemon"` on each account, then log them as in section 9.
+
+Without the MCP, use the Gmail connector in the single account named in the profile.
