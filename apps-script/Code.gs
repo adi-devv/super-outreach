@@ -2,7 +2,7 @@
  * ResumeAttachSend
  *
  * Attaches your resume PDF (from Google Drive) to Gmail drafts and sends them.
- * Meant to run on a time-driven trigger, e.g. every 4 hours.
+ * Meant to run on a time-driven trigger, e.g. every 6 hours.
  *
  * Each run handles drafts one at a time (attach -> send), oldest first, and stops at
  * MAX_PER_RUN sends, when the time budget runs out, or when the daily recipient quota
@@ -79,8 +79,8 @@ function installTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === "attachAndSendDrafts") ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger("attachAndSendDrafts").timeBased().everyHours(4).create();
-  Logger.log("Trigger installed: attachAndSendDrafts every 4 hours.");
+  ScriptApp.newTrigger("attachAndSendDrafts").timeBased().everyHours(6).create();
+  Logger.log("Trigger installed: attachAndSendDrafts every 6 hours.");
 }
 
 function getResume_() {

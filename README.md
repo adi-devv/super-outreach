@@ -3,7 +3,7 @@
 Automated cold-email job outreach with Claude.
 
 - Type `/outreach 20` and Claude finds 20 companies that are hiring and fit you, skips anyone you've already emailed, and writes a personal Gmail **draft** for each.
-- A small Google Apps Script then attaches your resume and sends those drafts every 4 hours (max 20 per run).
+- A small Google Apps Script then attaches your resume and sends those drafts every 6 hours (max 20 per run).
 
 Claude never sends anything itself. You can check or delete drafts before they go out.
 
@@ -33,7 +33,7 @@ Claude never sends anything itself. You can check or delete drafts before they g
 3. At the top, set `RESUME_NAME` to your resume's exact file name, and `SENDER_NAME` to your name.
 4. Press **Save**, pick `installTrigger` in the function menu, and press **Run**. Allow the permissions it asks for.
 
-That's it. It now runs every 4 hours on its own. You can see each run under **Executions** on the left.
+That's it. It now runs every 6 hours on its own. You can see each run under **Executions** on the left.
 
 ## Optional: spread drafts across several Gmail accounts
 
