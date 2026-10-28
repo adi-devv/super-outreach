@@ -52,7 +52,7 @@ Apply the hard filters, skips and best-fit ranking from the profile. Generic rul
 
 ## 5. Dedupe (every company, before adding it)
 1. Grep the decoded Drive files (`outreach_data.md` + every `outreach_batch_*.md`) for the company name and email domain, case-insensitive, plus name variants. Watch for substring false matches (e.g. "Cone" inside "Pinecone").
-2. Search Gmail Sent for the last 30 days only: `in:sent newer_than:30d COMPANY` and `... DOMAIN`. Mail older than 30 days that got no reply or bounced is deliberately fair game again (it was pruned from the dedupe list), but skip any company that replied, even long ago. With the `multi-gmail` MCP, run `search_mail` on every account (`list_accounts` first), since the company may have been contacted from another one.
+2. Search Gmail Sent for the last 30 days only: `in:sent newer_than:30d COMPANY` and `... DOMAIN`. Also check unsent drafts (`search_mail` with `folder: "drafts"` on every account), because those aren't in Sent yet. Mail older than 30 days that got no reply or bounced is deliberately fair game again (it was pruned from the dedupe list), but skip any company that replied, even long ago. With the `multi-gmail` MCP, run `search_mail` on every account (`list_accounts` first), since the company may have been contacted from another one.
 Skip anything already contacted, drafted, bounced, or checked and skipped.
 
 ## 6. Finding the person and email
