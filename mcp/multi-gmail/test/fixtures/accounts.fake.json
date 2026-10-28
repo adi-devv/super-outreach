@@ -1,0 +1,6 @@
+{
+  "accounts": [
+    { "name": "one", "email": "one@example.test", "appPassword": "fake pass word" },
+    { "name": "two", "email": "two@example.test", "appPassword": "another fake pass" }
+  ]
+}

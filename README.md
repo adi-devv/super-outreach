@@ -36,6 +36,10 @@ Claude never sends anything itself. You can check or delete drafts before they g
 
 That's it. It now runs every 4 hours on its own. You can see each run under **Executions** on the left.
 
+## Optional: spread drafts across several Gmail accounts
+
+[`mcp/multi-gmail`](mcp/multi-gmail) is a small MCP server (IMAP + Gmail app passwords, no Google Cloud) that creates drafts evenly across up to ~5 Gmail accounts, can read past mail and create threaded follow-up drafts, and **never sends** (no SMTP, no send tool). Install the Apps Script from `apps-script/` in each account. Setup is in its [README](mcp/multi-gmail/README.md); put your app passwords in a local `accounts.json`, which is gitignored.
+
 ## Use it
 
 ```

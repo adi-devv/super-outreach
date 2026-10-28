@@ -1,0 +1,6 @@
+{
+  "accounts": [
+    { "name": "a1", "email": "you1@gmail.com", "appPassword": "xxxx xxxx xxxx xxxx", "displayName": "Outreach Team", "signatureHtml": "<p>Best,<br>Outreach Team</p>", "maxPendingWeight": 80 },
+    { "name": "a2", "email": "you2@gmail.com", "appPassword": "xxxx xxxx xxxx xxxx", "maxPendingWeight": 80 }
+  ]
+}
