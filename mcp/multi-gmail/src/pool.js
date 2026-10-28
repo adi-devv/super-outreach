@@ -4,7 +4,7 @@ import { logError } from './log.js';
 import { textFromHtml } from './mime.js';
 import { threadHasReply } from './planner.js';
 
-const networkCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'NoConnection', 'SocketClosed', 'EPIPE']);
+const networkCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ETIMEOUT', 'NoConnection', 'SocketClosed', 'EPIPE']);
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export { headerValue };
@@ -55,7 +55,7 @@ async function parsed(message) {
     from: addressList(message.envelope?.from || value.from?.value), to: addressList(message.envelope?.to || value.to?.value),
     cc: addressList(message.envelope?.cc || value.cc?.value), replyTo: addressList(message.envelope?.replyTo || value.replyTo?.value),
     subject: message.envelope?.subject || value.subject || '', date: dateValue(message.envelope?.date || value.date || message.internalDate),
-    labels: labels(message.labels), textBody: stripQuoted(value.text || textFromHtml(value.html || '')),
+    labels: labels(message.labels), textBody: stripQuoted(value.html ? textFromHtml(value.html) : value.text || ''),
   };
 }
 
@@ -93,7 +93,7 @@ export class ImapPool {
 
   async connect(entry) {
     if (entry.client?.usable) return entry.client;
-    if (entry.client) { try { await entry.client.logout(); } catch {} }
+    if (entry.client) { try { await this.logout(entry.client); } catch {} }
     const client = new this.Client({
       host: 'imap.gmail.com', port: 993, secure: true, logger: false,
       auth: { user: entry.account.email, pass: this.passwordFor(entry.account.name) },
@@ -118,11 +118,24 @@ export class ImapPool {
   async run(name, operation) {
     return this.lock(name, async () => withRetry(async (attempt) => {
       const entry = this.entry(name);
-      if (attempt) { try { await entry.client?.logout(); } catch {} entry.client = null; entry.folders = null; }
+      if (attempt) { try { await this.logout(entry.client); } catch {} entry.client = null; entry.folders = null; }
       const client = await this.connect(entry);
       const folders = await this.folders(entry, client);
-      return operation(client, folders, entry);
+      return operation(client, folders, entry, attempt);
     }));
+  }
+
+  async logout(client) {
+    if (!client) return;
+    let timer;
+    try {
+      await Promise.race([client.logout(), new Promise((_, reject) => {
+        timer = setTimeout(() => { const error = new Error('IMAP logout timed out'); error.code = 'ETIMEOUT'; reject(error); }, 2000);
+      })]);
+    } catch (error) {
+      client.close?.();
+      throw error;
+    } finally { clearTimeout(timer); }
   }
 
   async draftMessages(name, query) {
@@ -147,7 +160,16 @@ export class ImapPool {
   async draftCount(name) { return (await this.draftMessages(name)).length; }
 
   async appendDraft(name, raw) {
-    return this.run(name, async (client, folders, entry) => {
+    const messageId = headerValue(raw, 'message-id');
+    return this.run(name, async (client, folders, entry, attempt) => {
+      if (attempt) {
+        try {
+          const existing = await this.draftWithMessageId(client, folders, messageId);
+          if (existing) return { uid: existing.uid, reconciled: true };
+        } catch (error) {
+          const uncertain = new Error('Draft append outcome is uncertain.'); uncertain.uncertain = true; throw uncertain;
+        }
+      }
       const mailbox = await client.getMailboxLock(folders.drafts);
       try {
         const result = await client.append(folders.drafts, raw, ['\\Draft', '\\Seen']);
@@ -155,6 +177,18 @@ export class ImapPool {
         return result;
       } finally { mailbox.release(); }
     });
+  }
+
+  async draftWithMessageId(client, folders, messageId) {
+    if (!messageId) throw new Error('Draft is missing Message-ID.');
+    const mailbox = await client.getMailboxLock(folders.drafts);
+    try {
+      const matches = await client.search({ header: { 'message-id': messageId } }, { uid: true });
+      if (matches === false) throw new Error('Draft search failed');
+      if (!matches?.length) return undefined;
+      const rows = await client.fetchAll(matches, { uid: true, headers: ['message-id'] }, { uid: true });
+      return rows.find((message) => headerValue(message.headers, 'message-id') === messageId);
+    } finally { mailbox.release(); }
   }
 
   async sentExists(name, firstRecipient, subject) {
@@ -177,22 +211,39 @@ export class ImapPool {
       let messages;
       try {
         const terms = [query, sinceDays ? `newer_than:${sinceDays}d` : ''].filter(Boolean).join(' ');
-        const range = terms ? await client.search({ gmraw: terms }) : '1:*';
+        const range = await client.search(terms ? { gmraw: terms } : { all: true }, { uid: true });
+        if (range === false) throw new Error('Search failed');
         messages = [];
-        for await (const message of client.fetch(range || [], { uid: true, envelope: true, internalDate: true, labels: true, threadId: true, source: true })) messages.push(await parsed(message));
+        for await (const message of client.fetch(range || [], { uid: true, envelope: true, internalDate: true, labels: true, threadId: true }, { uid: true })) messages.push(await parsed(message));
       } finally { mailbox.release(); }
       messages.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
       const threads = new Map();
       const all = await client.getMailboxLock(folders.all || path);
       try {
-        for (const threadId of new Set(messages.map((message) => message.threadId).filter(Boolean))) {
-          const range = await client.search({ threadId }); const thread = [];
-          for await (const message of client.fetch(range || [], { uid: true, envelope: true, threadId: true })) thread.push(await parsed(message));
-          threads.set(threadId, thread);
+        const threadFor = async (threadId) => {
+          if (!threadId) return [];
+          if (!threads.has(threadId)) {
+            const range = await client.search({ threadId }, { uid: true }); const thread = [];
+            for await (const message of client.fetch(range || [], { uid: true, envelope: true, internalDate: true, threadId: true, headers: ['message-id', 'in-reply-to', 'references'] }, { uid: true })) thread.push(await parsed(message));
+            threads.set(threadId, thread);
+          }
+          return threads.get(threadId);
+        };
+        const selected = [];
+        for (const message of messages) {
+          const thread = hasReply === undefined ? undefined : await threadFor(message.threadId);
+          if (hasReply === undefined || threadHasReply(thread, entry.account.email, message) === hasReply) selected.push(message);
+          if (selected.length === limit) break;
         }
+        if (hasReply === undefined) await Promise.all(selected.map((message) => threadFor(message.threadId)));
+        messages = selected;
       } finally { all.release(); }
-      return messages.filter((message) => hasReply === undefined || threadHasReply(threads.get(message.threadId) || [], entry.account.email) === hasReply)
-        .slice(0, limit).map(({ uid, messageId, threadId, from, to, cc, subject, date, textBody, labels: messageLabels }) => ({ uid, messageId, threadId, from, to, cc, subject, date, snippet: textBody.slice(0, 200), labels: messageLabels, threadMessageCount: (threads.get(threadId) || []).length }));
+      const bodyLock = await client.getMailboxLock(path);
+      try {
+        const bodies = await client.fetchAll(messages.map((message) => message.uid), { uid: true, envelope: true, internalDate: true, labels: true, threadId: true, source: true }, { uid: true });
+        const byUid = new Map((await Promise.all(bodies.map(parsed))).map((message) => [message.uid, message]));
+        return messages.map((message) => ({ ...message, ...byUid.get(message.uid) })).map(({ uid, messageId, threadId, from, to, cc, subject, date, textBody, labels: messageLabels }) => ({ uid, messageId, threadId, from, to, cc, subject, date, snippet: textBody.slice(0, 200), labels: messageLabels, threadMessageCount: (threads.get(threadId) || []).length }));
+      } finally { bodyLock.release(); }
     });
   }
 
@@ -245,14 +296,11 @@ export class ImapPool {
     return this.run(name, async (client, folders) => {
       const mailbox = await client.getMailboxLock(folders.drafts);
       try {
-        const matches = await client.search({ header: { 'message-id': messageId } });
-        for await (const message of client.fetch(matches, { uid: true, headers: ['message-id', 'x-mgmcp'] })) {
-          if (String(headerValue(message.headers, 'message-id')).includes('.mgmcp@') && headerValue(message.headers, 'x-mgmcp') === '1') {
-            await client.messageMove(message.uid, folders.trash, { uid: true });
-            return true;
-          }
-        }
-        return false;
+        const matches = await client.search({ header: { 'message-id': messageId } }, { uid: true });
+        if (matches === false || !matches?.length) return false;
+        const rows = await client.fetchAll(matches, { uid: true, flags: true, headers: ['message-id', 'x-mgmcp'] }, { uid: true });
+        const draft = rows.find((message) => headerValue(message.headers, 'message-id') === messageId && messageId.includes('.mgmcp@') && headerValue(message.headers, 'x-mgmcp') === '1' && message.flags?.has('\\Draft'));
+        return draft ? Boolean(await client.messageMove(draft.uid, folders.trash, { uid: true })) : false;
       } finally { mailbox.release(); }
     });
   }
@@ -260,6 +308,6 @@ export class ImapPool {
   async verify(name) { return this.run(name, async (_client, folders) => ({ drafts: folders.drafts })); }
 
   async close() {
-    await Promise.all([...this.entries.values()].map(async (entry) => { try { await entry.client?.logout(); } catch (error) { logError(error, 'IMAP close: '); } }));
+    await Promise.all([...this.entries.values()].map(async (entry) => { try { await this.logout(entry.client); } catch (error) { logError(error, 'IMAP close: '); } }));
   }
 }

@@ -24,8 +24,10 @@ export function replyDedupeKey({ inReplyTo, to = [], cc = [] }) {
   return `${inReplyTo}|${[...to, ...cc].map((value) => value.trim().toLowerCase()).sort().join(',')}`;
 }
 
-export function threadHasReply(messages, accountEmail) {
-  return messages.some((message) => !emails(message.from).some((value) => value.toLowerCase() === accountEmail.toLowerCase()));
+export function threadHasReply(messages, accountEmail, candidate) {
+  const external = messages.filter((message) => !emails(message.from).some((value) => value.toLowerCase() === accountEmail.toLowerCase()));
+  if (!candidate || !external.some((message) => message.inReplyTo || message.date)) return external.length > 0;
+  return external.some((message) => message.inReplyTo || new Date(message.date || 0) > new Date(candidate.date || 0));
 }
 
 export function planReplies(replies, { existingKeys = new Set() } = {}) {
@@ -53,7 +55,7 @@ export function planDrafts(drafts, accounts, { forcedAccount, fallback = true, e
     else { seen.add(draft.key); candidates.push({ ...draft, originalIndex: index }); }
   }
   const eligible = accounts.filter((a) => a.healthy !== false);
-  const targets = forcedAccount ? candidates.map(() => forcedAccount) : balanceDrafts(candidates, eligible);
+  const targets = forcedAccount ? balanceDrafts(candidates, eligible.filter((account) => account.name === forcedAccount)) : balanceDrafts(candidates, eligible);
   for (let position = 0; position < candidates.length; position += 1) {
     const draft = candidates[position]; const account = targets[position];
     results[draft.originalIndex] = account ? { index: draft.originalIndex, account, status: 'planned', draft, weight: draftWeight(draft) } : { index: draft.originalIndex, status: 'failed', error: 'No healthy account has pending capacity.' };

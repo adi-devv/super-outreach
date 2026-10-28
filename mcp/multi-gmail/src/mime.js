@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import MailComposer from 'nodemailer/lib/mail-composer';
+import { convert } from 'html-to-text';
 
 export function textFromHtml(html = '') {
-  return html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+  return convert(String(html || ''), { wordwrap: false }).replace(/\s+/g, ' ').trim();
 }
 
 export async function buildRaw(account, draft) {

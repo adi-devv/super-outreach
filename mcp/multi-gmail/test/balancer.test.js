@@ -37,6 +37,13 @@ test('dry planning needs no pool or network', () => {
   assert.deepEqual(plan.results.map((result) => [result.status, result.account]), [['planned', 'a'], ['planned', 'b']]);
 });
 
+test('forced accounts still respect health and capacity', () => {
+  const unhealthy = planDrafts([draft(1)], accounts({ a: { healthy: false } }), { forcedAccount: 'a' });
+  const full = planDrafts([draft(2)], accounts({ a: { maxPendingWeight: 1 } }), { forcedAccount: 'a' });
+  assert.equal(unhealthy.results[0].status, 'failed');
+  assert.equal(full.results[0].status, 'failed');
+});
+
 test('a fake account file builds the dry-run server without connecting', () => {
   const store = loadAccounts(new URL('./fixtures/accounts.fake.json', import.meta.url));
   let touched = false;

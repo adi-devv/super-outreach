@@ -15,7 +15,7 @@ const replyShape = z.object({ replyTo: z.object({ account: z.string().min(1), me
 const text = (result) => ({ content: [{ type: 'text', text: JSON.stringify(result) }] });
 
 function publicAccount(account, state, drafts = 0, pendingWeight = 0) {
-  return { name: account.name, email: account.email, drafts, pendingWeight, assignedThisSession: state.assignedThisSession, healthy: state.healthy, ...(state.lastError ? { lastError: redact(state.lastError) } : {}) };
+  return { name: account.name, email: account.email, drafts, pendingWeight, assignedThisSession: state.assignedThisSession, healthy: state.healthy, ...(state.lastError ? { lastError: redact(state.lastError) } : {}), ...(state.error ? { error: state.error } : {}) };
 }
 
 function hint(error) {
@@ -35,11 +35,11 @@ export function createApp({ accountStore = loadAccounts(), pool = new ImapPool(a
       try {
         const messages = includeMessages ? await pool.draftMessages(account.name) : [];
         const state = pool.state(account.name);
-        return { ...account, ...state, messages, drafts: messages.length, load: messages.reduce((total, message) => total + draftWeight(message), 0) + state.assignedThisSession };
+        return { ...account, ...state, messages, drafts: messages.length, load: messages.reduce((total, message) => total + draftWeight(message), 0) };
       } catch (error) {
         pool.markUnhealthy(account.name, error);
         const state = pool.state(account.name);
-        return { ...account, ...state, messages: [], drafts: 0, load: state.assignedThisSession };
+        return { ...account, ...state, messages: [], drafts: undefined, load: undefined, error: redact(error) };
       }
     }));
   }
@@ -68,6 +68,7 @@ export function createApp({ accountStore = loadAccounts(), pool = new ImapPool(a
       }
       if (!dry) {
         let pending = plan.results.filter((result) => result.status === 'planned');
+        const createdWeights = new Map();
         while (pending.length) {
           const groups = new Map();
           for (const item of pending) { if (!groups.has(item.account)) groups.set(item.account, []); groups.get(item.account).push(item); }
@@ -79,9 +80,10 @@ export function createApp({ accountStore = loadAccounts(), pool = new ImapPool(a
                 const raw = await buildRaw(accounts.find((a) => a.name === name), item.draft);
                 const appended = await pool.appendDraft(name, raw.raw);
                 plan.results[item.index] = { index: item.index, account: name, status: 'created', messageId: raw.messageId, uid: appended.uid };
+                createdWeights.set(name, (createdWeights.get(name) || 0) + draftWeight(item.draft));
               } catch (error) {
                 pool.markUnhealthy(name, error);
-                plan.results[item.index] = { index: item.index, account: name, status: 'failed', error: redact(error) };
+                plan.results[item.index] = { index: item.index, account: name, status: error.uncertain ? 'uncertain' : 'failed', error: redact(error) };
                 remaining.push(...items.slice(offset + 1));
                 break;
               }
@@ -93,13 +95,13 @@ export function createApp({ accountStore = loadAccounts(), pool = new ImapPool(a
             for (const item of requeue) plan.results[item.index] = { index: item.index, account: forcedAccount, status: 'failed', error: 'Selected account failed and fallback is disabled.' };
             break;
           }
-          const active = accounts.map((a) => ({ ...a, ...pool.state(a.name), load: (states.find((s) => s.name === a.name)?.load || 0) + pool.state(a.name).assignedThisSession }));
+          const active = accounts.map((a) => ({ ...a, ...pool.state(a.name), load: (states.find((s) => s.name === a.name)?.load || 0) + (createdWeights.get(a.name) || 0) }));
           const reassigned = balanceDrafts(requeue.map((item) => item.draft), active);
-          pending = requeue.filter((_, index) => reassigned[index]).map((item, index) => ({ ...item, account: reassigned[index] }));
+          pending = requeue.flatMap((item, index) => reassigned[index] ? [{ ...item, account: reassigned[index] }] : []);
           for (const [index, item] of requeue.entries()) if (!reassigned[index]) plan.results[item.index] = { index: item.index, status: 'failed', error: 'No healthy account has pending capacity.' };
         }
       }
-      const summary = accounts.map((item) => ({ account: item.name, created: plan.results.filter((r) => r.account === item.name && r.status === 'created').length, planned: plan.results.filter((r) => r.account === item.name && r.status === 'planned').length, duplicate: plan.results.filter((r) => r.account === item.name && r.status === 'duplicate').length, failed: plan.results.filter((r) => r.account === item.name && r.status === 'failed').length }));
+      const summary = accounts.map((item) => ({ account: item.name, created: plan.results.filter((r) => r.account === item.name && r.status === 'created').length, planned: plan.results.filter((r) => r.account === item.name && r.status === 'planned').length, duplicate: plan.results.filter((r) => r.account === item.name && r.status === 'duplicate').length, failed: plan.results.filter((r) => r.account === item.name && r.status === 'failed').length, uncertain: plan.results.filter((r) => r.account === item.name && r.status === 'uncertain').length }));
       return text({ results: plan.results.map(({ draft, weight, ...result }) => result), summary });
     } catch (error) { return text({ error: redact(error) }); }
   });
@@ -152,7 +154,7 @@ export function createApp({ accountStore = loadAccounts(), pool = new ImapPool(a
         const raw = await buildRaw(accounts.find((account) => account.name === item.account), item.draft);
         const appended = await pool.appendDraft(item.account, raw.raw);
         results[item.index] = { index: item.index, account: item.account, status: 'created', messageId: raw.messageId, uid: appended?.uid, threadId: item.threadId };
-      } catch (error) { results[item.index] = { index: item.index, account: item.account, status: 'failed', error: redact(error) }; }
+      } catch (error) { results[item.index] = { index: item.index, account: item.account, status: error.uncertain ? 'uncertain' : 'failed', error: redact(error) }; }
     }));
     return text(results.map(({ draft, ...result }) => result));
   });
@@ -173,7 +175,7 @@ export function createApp({ accountStore = loadAccounts(), pool = new ImapPool(a
       const selected = account ? [accounts.find((item) => item.name === account)].filter(Boolean) : accounts;
       if (!selected.length) throw new Error(`Unknown account: ${account}`);
       const values = await snapshot();
-      return text(values.filter((item) => selected.some((a) => a.name === item.name)).map((item) => ({ account: item.name, drafts: item.drafts, pendingWeight: item.load })));
+      return text(values.filter((item) => selected.some((a) => a.name === item.name)).map((item) => item.error ? { account: item.name, status: 'unknown', error: item.error } : { account: item.name, drafts: item.drafts, pendingWeight: item.load }));
     } catch (error) { return text({ error: redact(error) }); }
   });
 

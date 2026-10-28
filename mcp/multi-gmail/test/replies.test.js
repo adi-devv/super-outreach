@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { simpleParser } from 'mailparser';
-import { buildRaw } from '../src/mime.js';
+import { buildRaw, textFromHtml } from '../src/mime.js';
 import { planReplies, replyDedupeKey, replyRecipients, replyReferences, replySubject, threadHasReply } from '../src/planner.js';
 
 const account = { name: 'a', email: 'me@example.com' };
@@ -45,4 +45,8 @@ test('reply draft MIME has conversation headers', async () => {
   const parsed = await simpleParser(built.raw);
   assert.equal(parsed.inReplyTo, '<original@example.com>');
   assert.deepEqual(parsed.references, ['<first@example.com>', '<original@example.com>']);
+});
+
+test('HTML text conversion decodes entities', () => {
+  assert.equal(textFromHtml('It&#39;s <b>ready</b>'), "It's ready");
 });
