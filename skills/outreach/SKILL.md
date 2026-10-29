@@ -91,7 +91,7 @@ Use the cold template, subject line rules and body rules from `profile.md`. Gene
 When asked to check bounces: search Gmail for `from:mailer-daemon newer_than:2d` and append the bounced companies to `DATA_FILE` under `### Bounced YYYY-MM-DD`. Don't re-guess bounced addresses; suggest applying via the job post instead.
 
 ## 10. Cautions
-- **Tense:** follow the profile's status line. If the profile says the role has ended, write it in the past tense ("at Kodo", "I built"), never "currently at". Check every template and every draft before creating it.
+- **Tense:** follow the profile's status line. If the profile says the role has ended, write it in the past tense ("at Acme", "I built"), never "currently at". Check every template and every draft before creating it.
 - Don't use a current employer's paid tools (Sales Navigator, Apollo, etc.) for your own job search.
 - If the profile's proof points come from a current employer, confirm they're OK to share externally before a large batch.
 - High bounce rates can get a Gmail account rate-limited. Prefer published addresses, and keep guessed variants to a few per company.
