@@ -21,6 +21,13 @@ Everything personal lives in **`profile.md`** next to this file (copied from `pr
 
 Read it in full before doing anything else. If `profile.md` is missing or still has `{{PLACEHOLDER}}` values, stop and tell the user which fields to fill in. Never invent facts about the user; use only what the profile says.
 
+## 0b. Replies waiting on the user (once per session)
+On the first run in a conversation, before any research, check whether anyone wrote back. Skip this if you already did it earlier in the same conversation.
+1. On every account (`list_accounts` first): `search_mail` with `{account, folder: "sent", hasReply: true, sinceDays: 30}`. Without the MCP, search the connector's Gmail for `in:inbox newer_than:30d -from:mailer-daemon` and match against Sent.
+2. `read_thread` on each hit. Keep it only if the newest message is from them, not from the user. Drop auto-replies (out-of-office, "we received your application", no-reply senders) and bounces.
+3. Show the user a short list: company, sender, account, one line on what they asked or offered, and how urgent it looks (interview slot, test deadline, request for info). Then carry on with the run without waiting, and repeat the list at the top of the final summary.
+4. Don't draft or send replies unless the user asks. If they do, use `create_reply_drafts` in the account that holds the thread.
+
 ## 1. How the focus works
 - **Focus given:** the focus decides WHO to target and overrides any conflicting default-targeting rule in the profile (company size, sector, location, pay bar, startup preference).
 - **No focus:** use the profile's default targeting.
@@ -66,19 +73,19 @@ Use the cold template, subject line rules and body rules from `profile.md`. Gene
 - Reorder the proof-point bullets so the one closest to the company's product comes first.
 - Write a fresh company-specific line every time. Never "I came across X while…".
 - Signature links are hyperlinked words only (e.g. `LinkedIn | GitHub`), never raw URLs. No other links in the body.
+- Every `href` points straight at the site (`https://github.com/...`, `https://www.linkedin.com/in/...`). HTML copied out of Gmail wraps links in `google.com/url?q=` redirects that expire, and turns phone numbers into `javascript:void(0)` links; unwrap both before creating the draft. The `multi-gmail` MCP does this automatically.
 - Follow-ups reply in the original thread and keep its subject, using the profile's follow-up template.
 
 ## 8. The run, step by step
-1. Read `profile.md`. Parse `N` and the focus. Read `DATA_FILE`.
+1. Read `profile.md`. Run the reply check (section 0b) if this conversation hasn't had one yet. Parse `N` and the focus. Read `DATA_FILE`.
 2. Research companies until you have 10 that pass the filters (or the focus) and dedupe.
 3. **Every 10 companies:** create the Gmail drafts (HTML, one draft per company, all addresses in To; with the MCP, one `create_drafts` call, which spreads them across accounts), then append the batch to `DATA_FILE`:
    - Heading: `### Batch NN — COUNT companies, FOCUS-or-default (researched DATE) — DRAFTS CREATED DATE TIME`
-- Every `href` points straight at the site (`https://github.com/...`, `https://www.linkedin.com/in/...`). HTML copied out of Gmail wraps links in `google.com/url?q=` redirects that expire, and turns phone numbers into `javascript:void(0)` links; unwrap both before creating the draft. The `multi-gmail` MCP does this automatically.
    - One line per company: `- Company — domain`, adding `(unverified)` for guessed addresses.
    - One line: "Checked and skipped: COMPANY (reason), …" so later runs don't recheck them.
 4. Repeat until N companies are drafted. If sources run dry before N, stop, log what you have, and say so.
 5. **Don't send from Claude.** The auto-sender Apps Script (`apps-script/Code.gs`) attaches the resume and sends drafts on a timer (every 6 hours), max 20 per run. Install it separately in every account that holds drafts.
-6. Finish with a short summary: companies found, drafts created, companies logged, how many addresses are guesses, and anything that blocked the run (e.g. no browser, so LinkedIn was skipped).
+6. Finish with a short summary: replies waiting on the user (from section 0b), companies found, drafts created, companies logged, how many addresses are guesses, and anything that blocked the run (e.g. no browser, so LinkedIn was skipped).
 
 ## 9. Bounces
 When asked to check bounces: search Gmail for `from:mailer-daemon newer_than:2d` and append the bounced companies to `DATA_FILE` under `### Bounced YYYY-MM-DD`. Don't re-guess bounced addresses; suggest applying via the job post instead.
