@@ -73,6 +73,7 @@ Use the cold template, subject line rules and body rules from `profile.md`. Gene
 2. Research companies until you have 10 that pass the filters (or the focus) and dedupe.
 3. **Every 10 companies:** create the Gmail drafts (HTML, one draft per company, all addresses in To; with the MCP, one `create_drafts` call, which spreads them across accounts), then append the batch to `DATA_FILE`:
    - Heading: `### Batch NN — COUNT companies, FOCUS-or-default (researched DATE) — DRAFTS CREATED DATE TIME`
+- Every `href` points straight at the site (`https://github.com/...`, `https://www.linkedin.com/in/...`). HTML copied out of Gmail wraps links in `google.com/url?q=` redirects that expire, and turns phone numbers into `javascript:void(0)` links; unwrap both before creating the draft. The `multi-gmail` MCP does this automatically.
    - One line per company: `- Company — domain`, adding `(unverified)` for guessed addresses.
    - One line: "Checked and skipped: COMPANY (reason), …" so later runs don't recheck them.
 4. Repeat until N companies are drafted. If sources run dry before N, stop, log what you have, and say so.
