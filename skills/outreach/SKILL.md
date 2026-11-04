@@ -37,7 +37,7 @@ On the first run in a conversation, before any research, check whether anyone wr
 - The path is `DATA_FILE` in the profile: one markdown dedupe list, one line per company, `- Company — domain`. Start it from `templates/outreach_data.md` in the repo.
 - **Reading:** read the whole file before researching. **Logging:** append new companies at the end under a dated `###` heading (see section 8); never rewrite the older lines.
 - It lives on the user's machine, not in Drive and not in git. If `DATA_FILE` is missing or the file doesn't exist, stop and tell the user.
-- Needs the Gmail connector or the `multi-gmail` MCP (see section 11).
+- Needs the Gmail connector or the `multi-gmail` MCP (see section 12).
 - This skill + `profile.md` are the ONLY source for email format, subject lines, recipients and rules.
 
 ## 3. Sources
@@ -96,7 +96,23 @@ When asked to check bounces: search Gmail for `from:mailer-daemon newer_than:2d`
 - If the profile's proof points come from a current employer, confirm they're OK to share externally before a large batch.
 - High bounce rates can get a Gmail account rate-limited. Prefer published addresses, and keep guessed variants to a few per company.
 
-## 11. Multiple Gmail accounts (`multi-gmail` MCP)
+## 11. Keeping cost low (subagents and models)
+The main agent plans, reviews and decides. Hand the rest to the cheapest worker that does it well, and decide the model before launching (switching mid-run throws away the agent's progress).
+
+| Step | Worker |
+|---|---|
+| Dedupe, bounce scans, building drafts, logging | Local scripts |
+| Reading pages and copying names/titles (LinkedIn people search, job boards) | Haiku |
+| Web research that needs judgment (finding people, email-format evidence) | Codex CLI if available (runs on its own plan), else Sonnet |
+| Writing openers / subjects | One Sonnet pass over all rows at the end |
+| Checking the results, final call on what gets mailed | Main agent |
+
+- **Briefs:** write the instructions to a file once; each agent gets a short prompt pointing at it plus its slice (firm list, exclude list, output path). Split work 2–3 ways by segment and run in parallel.
+- **Output:** agents write JSON files and reply with one line. Read the files, never the agent transcripts.
+- **Browser:** read pages as text (`get_page_text`), not screenshots. One search per company, a second only if the first is empty. Each agent uses its own tab. On LinkedIn, read-only: never connect, message or follow. Plain web search can't see LinkedIn, so recruiter names at large firms need the signed-in browser.
+- **Check cheap-model output with a script before drafting:** the name appears on the page it cites, the address matches the confirmed format for that domain, and it isn't in the dedupe list. Drop anything that fails; don't ask the model to fix it.
+
+## 12. Multiple Gmail accounts (`multi-gmail` MCP)
 Optional. `mcp/multi-gmail/` in this repo is a stdio MCP that works over IMAP with app passwords, so several Gmail accounts can hold drafts. It never sends mail. Setup is in its README; accounts go in the gitignored `accounts.json`.
 - `list_accounts`, `verify_account`: check what is configured and that it logs in.
 - `create_drafts`: HTML drafts, spread across accounts so none builds too large a pending queue (`maxPendingWeight`). Pass `account` to pin one. Use `dryRun` to see the plan first.
