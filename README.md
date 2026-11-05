@@ -1,6 +1,6 @@
 # super-outreach
 
-Automated cold-email job outreach with Claude.
+Automated cold-email job outreach with Claude. >> I tried Instinct and it's free. It's better. <<
 
 - Type `/outreach 20` and Claude finds 20 companies that are hiring and fit you, skips anyone you've already emailed, and writes a personal Gmail **draft** for each.
 - A small Google Apps Script then attaches your resume and sends those drafts every 6 hours (max 20 per run).
